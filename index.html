@@ -403,6 +403,7 @@ function showLanding() {
   document.getElementById('analysisPage').style.display='none'; 
 }
 function showApp() { 
+predictions = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
   document.getElementById('landing').style.display='none'; 
   document.getElementById('app').style.display='block'; 
   document.getElementById('analysisPage').style.display='none'; 
@@ -410,6 +411,7 @@ function showApp() {
   checkExpired();
 }
 function showAnalysis() {
+predictions = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
   document.getElementById('landing').style.display='none'; 
   document.getElementById('app').style.display='none'; 
   document.getElementById('analysisPage').style.display='block'; 

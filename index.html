@@ -387,34 +387,37 @@ textarea.form-input{min-height:80px;resize:vertical}
 
 
 <script>
-// ===== DATA LAYER =====
+<script>
 const STORE_KEY = 'prediction_tracker_v1';
+const API_BASE = 'https://prediction-tracker-api.easyflowworks.workers.dev';
 let predictions = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
 let currentFilter = 'all';
 let resolvingId = null;
 const priceCache = {};
+let mediaRecorder = null;
+let isRecording = false;
 
 function save() { localStorage.setItem(STORE_KEY, JSON.stringify(predictions)); }
 
 // ===== NAVIGATION =====
-function showLanding() { 
-  document.getElementById('landing').style.display=''; 
-  document.getElementById('app').style.display='none'; 
-  document.getElementById('analysisPage').style.display='none'; 
+function showLanding() {
+  document.getElementById('landing').style.display='';
+  document.getElementById('app').style.display='none';
+  document.getElementById('analysisPage').style.display='none';
 }
-function showApp() { 
-predictions = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
-  document.getElementById('landing').style.display='none'; 
-  document.getElementById('app').style.display='block'; 
-  document.getElementById('analysisPage').style.display='none'; 
-  renderPredictions(); 
+function showApp() {
+  predictions = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+  document.getElementById('landing').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('analysisPage').style.display='none';
+  renderPredictions();
   checkExpired();
 }
 function showAnalysis() {
-predictions = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
-  document.getElementById('landing').style.display='none'; 
-  document.getElementById('app').style.display='none'; 
-  document.getElementById('analysisPage').style.display='block'; 
+  predictions = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+  document.getElementById('landing').style.display='none';
+  document.getElementById('app').style.display='none';
+  document.getElementById('analysisPage').style.display='block';
   renderAnalysis();
 }
 
@@ -432,7 +435,6 @@ function openNewModal(type) {
   document.getElementById('stockForm').style.display = type==='stock' ? 'block' : 'none';
   document.getElementById('customForm').style.display = type==='custom' ? 'block' : 'none';
   document.getElementById('modalTitle').textContent = type==='stock' ? 'New Stock Prediction' : 'New Custom Prediction';
-  // Set default deadline to 1 week from now
   const d = new Date(); d.setDate(d.getDate()+7);
   const dl = d.toISOString().slice(0,16);
   document.getElementById('stockDeadline').value = dl;
@@ -440,7 +442,7 @@ function openNewModal(type) {
 }
 function closeModal() { document.getElementById('newModal').classList.remove('show'); }
 
-// ===== STOCK PRICE FETCHING (Google Finance + fallback) =====
+// ===== TICKER SEARCH =====
 const POPULAR_TICKERS = [
   {symbol:'MSFT',name:'Microsoft Corp',exchange:'NASDAQ'},
   {symbol:'AAPL',name:'Apple Inc',exchange:'NASDAQ'},
@@ -464,17 +466,17 @@ const POPULAR_TICKERS = [
   {symbol:'PLTR',name:'Palantir',exchange:'NASDAQ'},
 ];
 
+
 function searchTicker(q) {
   const results = document.getElementById('tickerResults');
   if (!q || q.length < 1) { results.classList.remove('show'); return; }
   const upper = q.toUpperCase();
   const matches = POPULAR_TICKERS.filter(t => t.symbol.includes(upper) || t.name.toUpperCase().includes(upper)).slice(0,6);
   if (matches.length === 0) {
-    // Allow custom ticker
-    results.innerHTML = `<div class="ticker-result-item" onclick="selectTicker('${upper}','','')"><span class="ticker-symbol">${upper}</span> — Use custom ticker</div>`;
+    results.innerHTML = '<div class="ticker-result-item" onclick="selectTicker(\'' + upper + '\',\'\',\'\')"><span class="ticker-symbol">' + upper + '</span> — Use custom ticker</div>';
   } else {
-    results.innerHTML = matches.map(t => 
-      `<div class="ticker-result-item" onclick="selectTicker('${t.symbol}','${t.name}','${t.exchange}')"><span class="ticker-symbol">${t.symbol}</span> — ${t.name} <span style="color:var(--text2);font-size:.75rem">${t.exchange}</span></div>`
+    results.innerHTML = matches.map(t =>
+      '<div class="ticker-result-item" onclick="selectTicker(\'' + t.symbol + '\',\'' + t.name + '\',\'' + t.exchange + '\')"><span class="ticker-symbol">' + t.symbol + '</span> — ' + t.name + ' <span style="color:var(--text2);font-size:.75rem">' + t.exchange + '</span></div>'
     ).join('');
   }
   results.classList.add('show');
@@ -484,78 +486,86 @@ async function selectTicker(symbol, name, exchange) {
   document.getElementById('tickerInput').value = symbol;
   document.getElementById('tickerResults').classList.remove('show');
   if (exchange) document.getElementById('exchangeInput').value = exchange;
-  // Fetch current price
-  document.getElementById('tickerInfo').innerHTML = `<span style="color:var(--text2);font-size:.85rem">Fetching price for ${symbol}…</span>`;
-  const price = await fetchStockPrice(symbol, exchange || document.getElementById('exchangeInput').value);
-  if (price !== null) {
-    document.getElementById('tickerInfo').innerHTML = `<span class="current-price">Current price: $${price.toFixed(2)}</span>${name ? ` <span style="color:var(--text2);font-size:.85rem">· ${name}</span>` : ''}`;
+  document.getElementById('tickerInfo').innerHTML = '<span style="color:var(--text2);font-size:.85rem">Fetching price for ' + symbol + '...</span>';
+  const result = await fetchStockPrice(symbol, exchange || document.getElementById('exchangeInput').value);
+  if (result) {
+    const displayName = result.name || name || symbol;
+    let info = '<span class="current-price">Current: $' + result.price.toFixed(2) + '</span> <span style="color:var(--text2);font-size:.85rem">\u00b7 ' + displayName + ' via ' + result.source + '</span>';
+    if (result.details) info += '<br><span style="color:var(--text2);font-size:.8rem">H: $' + result.details.high + ' L: $' + result.details.low + ' ' + (result.details.changePercent || '') + '</span>';
+    document.getElementById('tickerInfo').innerHTML = info;
   } else {
-    document.getElementById('tickerInfo').innerHTML = `<span style="color:var(--text2);font-size:.85rem">${name || symbol} — price unavailable (offline mode)</span>`;
+    document.getElementById('tickerInfo').innerHTML = '<span style="color:var(--text2);font-size:.85rem">' + (name || symbol) + ' \u2014 price unavailable</span>';
   }
 }
 
 async function fetchStockPrice(ticker, exchange) {
-  const cacheKey = `${ticker}:${exchange}`;
+  const cacheKey = ticker + ':' + exchange;
   const cached = priceCache[cacheKey];
-  if (cached && Date.now() - cached.ts < 5 * 60 * 1000) return cached.price;
-
+  if (cached && Date.now() - cached.ts < 5 * 60 * 1000) return cached;
   try {
-    // Try Google Finance via CORS proxy (or direct in some environments)
-    const url = `https://www.google.com/finance/quote/${ticker}:${exchange}`;
-    const resp = await fetch(url, { mode: 'no-cors' }).catch(() => null);
-    // no-cors returns opaque response, so we try a public proxy approach
-    // Fallback: use a simple API
-    const apiResp = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`).catch(()=>null);
-    if (apiResp && apiResp.ok) {
-      const data = await apiResp.json();
-      const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
-      if (price) {
-        priceCache[cacheKey] = { price, ts: Date.now() };
-        return price;
+    const resp = await fetch(API_BASE + '/api/stock?ticker=' + ticker + '&exchange=' + exchange);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.price) {
+        const r = { price: data.price, name: data.name, source: data.source, details: data.details, ts: Date.now() };
+        priceCache[cacheKey] = r;
+        return r;
       }
     }
   } catch(e) {}
   return null;
 }
 
-// ===== VOICE RECOGNITION =====
-let recognition = null;
-let isRecording = false;
-
+// ===== VOICE: Azure OpenAI gpt-4o-transcribe =====
 function toggleVoice() {
   const btn = document.getElementById('voiceBtn');
-  if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-    showToast('⚠️ Speech recognition not supported in this browser. Use Chrome.');
-    return;
-  }
   if (isRecording) {
-    recognition.stop();
+    if (mediaRecorder) mediaRecorder.stop();
     return;
   }
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  recognition = new SpeechRecognition();
-  recognition.lang = 'en-US';
-  recognition.continuous = false;
-  recognition.interimResults = false;
-  recognition.onstart = () => { isRecording = true; btn.classList.add('recording'); };
-  recognition.onresult = (e) => {
-    const text = e.results[0][0].transcript;
-    document.getElementById('customText').value = text;
-  };
-  recognition.onend = () => { isRecording = false; btn.classList.remove('recording'); };
-  recognition.onerror = (e) => { isRecording = false; btn.classList.remove('recording'); showToast('⚠️ Voice error: ' + e.error); };
-  recognition.start();
+  if (!navigator.mediaDevices) {
+    showToast('\u26a0\ufe0f Microphone not available');
+    return;
+  }
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+    isRecording = true;
+    btn.classList.add('recording');
+    var chunks = [];
+    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+    mediaRecorder.ondataavailable = function(e) { chunks.push(e.data); };
+    mediaRecorder.onstop = async function() {
+      isRecording = false;
+      btn.classList.remove('recording');
+      stream.getTracks().forEach(function(t) { t.stop(); });
+      var blob = new Blob(chunks, { type: 'audio/webm' });
+      showToast('\ud83c\udfa4 Transcribing with Azure AI...');
+      var form = new FormData();
+      form.append('audio', blob, 'recording.webm');
+      try {
+        var resp = await fetch(API_BASE + '/api/transcribe', { method: 'POST', body: form });
+        var data = await resp.json();
+        if (data.text) {
+          document.getElementById('customText').value = data.text;
+          showToast('\u2713 Transcribed!');
+        } else {
+          showToast('\u26a0\ufe0f ' + (data.error || 'Transcription failed'));
+        }
+      } catch(e) { showToast('\u26a0\ufe0f Network error'); }
+    };
+    mediaRecorder.start();
+    showToast('\ud83c\udfa4 Recording... click again to stop');
+  }).catch(function(e) { showToast('\u26a0\ufe0f Mic access denied'); });
 }
+
 
 // ===== SUBMIT =====
 function submitStock(e) {
   e.preventDefault();
-  const ticker = document.getElementById('tickerInput').value.trim().toUpperCase();
-  if (!ticker) { showToast('⚠️ Please select a ticker'); return false; }
-  const pred = {
+  var ticker = document.getElementById('tickerInput').value.trim().toUpperCase();
+  if (!ticker) { showToast('\u26a0\ufe0f Please select a ticker'); return false; }
+  var pred = {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
-    type: 'stock',
-    ticker,
+    type: 'stock', ticker: ticker,
     exchange: document.getElementById('exchangeInput').value,
     direction: document.getElementById('directionInput').value,
     targetPrice: parseFloat(document.getElementById('targetPrice').value),
@@ -563,22 +573,17 @@ function submitStock(e) {
     confidence: document.getElementById('stockConfidence').value,
     reasoning: document.getElementById('stockReasoning').value,
     createdAt: new Date().toISOString(),
-    status: 'pending',
-    result: null,
-    resolvedAt: null,
+    status: 'pending', result: null, resolvedAt: null,
   };
-  predictions.unshift(pred);
-  save();
-  closeModal();
-  showApp();
-  showToast('✓ Stock prediction saved!');
+  predictions.unshift(pred); save(); closeModal(); showApp();
+  showToast('\u2713 Stock prediction saved!');
   scheduleNotification(pred);
   return false;
 }
 
 function submitCustom(e) {
   e.preventDefault();
-  const pred = {
+  var pred = {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
     type: 'custom',
     text: document.getElementById('customText').value,
@@ -587,26 +592,21 @@ function submitCustom(e) {
     confidence: document.getElementById('customConfidence').value,
     reasoning: document.getElementById('customReasoning').value,
     createdAt: new Date().toISOString(),
-    status: 'pending',
-    result: null,
-    resolvedAt: null,
+    status: 'pending', result: null, resolvedAt: null,
   };
-  predictions.unshift(pred);
-  save();
-  closeModal();
-  showApp();
-  showToast('✓ Prediction saved!');
+  predictions.unshift(pred); save(); closeModal(); showApp();
+  showToast('\u2713 Prediction saved!');
   scheduleNotification(pred);
   return false;
 }
 
 // ===== RENDER =====
 function renderPredictions() {
-  const list = document.getElementById('predictionList');
-  const empty = document.getElementById('emptyState');
-  let filtered = predictions;
-  if (currentFilter === 'pending') filtered = predictions.filter(p=>p.status==='pending');
-  if (currentFilter === 'resolved') filtered = predictions.filter(p=>p.status!=='pending');
+  var list = document.getElementById('predictionList');
+  var empty = document.getElementById('emptyState');
+  var filtered = predictions;
+  if (currentFilter === 'pending') filtered = predictions.filter(function(p){return p.status==='pending';});
+  if (currentFilter === 'resolved') filtered = predictions.filter(function(p){return p.status!=='pending';});
 
   if (filtered.length === 0) {
     list.innerHTML = '';
@@ -615,208 +615,239 @@ function renderPredictions() {
     return;
   }
   empty.style.display = 'none';
-  list.innerHTML = filtered.map(p => {
-    const isExpired = new Date(p.deadline) <= new Date() && p.status === 'pending';
-    const title = p.type === 'stock' 
-      ? `${p.ticker} ${p.direction === 'above' ? '↑ above' : '↓ below'} $${p.targetPrice}`
+  list.innerHTML = filtered.map(function(p) {
+    var isExpired = new Date(p.deadline) <= new Date() && p.status === 'pending';
+    var title = p.type === 'stock'
+      ? p.ticker + ' ' + (p.direction === 'above' ? '\u2191 above' : '\u2193 below') + ' $' + p.targetPrice
       : p.text;
-    const deadlineStr = new Date(p.deadline).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
-    const statusClass = p.status==='pending' ? (isExpired ? 'status-pending' : 'status-pending') : (p.result==='correct' ? 'status-correct' : 'status-wrong');
-    const statusText = p.status==='pending' ? (isExpired ? '⏰ Expired — resolve now' : '⏳ Pending') : (p.result==='correct' ? '✓ Correct' : '✗ Wrong');
-    const confEmoji = p.confidence==='high' ? '🔥' : p.confidence==='medium' ? '🤔' : '🎲';
-    return `<div class="card pred-card">
-      <span class="pred-type ${p.type}">${p.type==='stock'?'📈 Stock':'💬 Custom'}</span>
-      <h3>${escHtml(title.length>80 ? title.slice(0,80)+'…' : title)}</h3>
-      <div class="pred-meta">
-        <span>📅 ${deadlineStr}</span>
-        <span>${confEmoji} Confidence: ${p.confidence}${p.type==='stock'?' · '+p.exchange:' · '+p.category}</span>
-        ${p.reasoning ? `<span style="font-style:italic">"${escHtml(p.reasoning.slice(0,100))}"</span>` : ''}
-      </div>
-      <span class="pred-status ${statusClass}">${statusText}</span>
-      <div class="pred-actions">
-        ${p.status==='pending' ? `<button class="resolve-correct" onclick="openResolve('${p.id}')">Resolve</button>` : ''}
-        <button onclick="deletePrediction('${p.id}')">Delete</button>
-      </div>
-    </div>`;
+    var deadlineStr = new Date(p.deadline).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    var statusClass = p.status==='pending' ? 'status-pending' : (p.result==='correct' ? 'status-correct' : 'status-wrong');
+    var statusText = p.status==='pending' ? (isExpired ? '\u23f0 Expired \u2014 resolve now' : '\u23f3 Pending') : (p.result==='correct' ? '\u2713 Correct' : '\u2717 Wrong');
+    var confEmoji = p.confidence==='high' ? '\ud83d\udd25' : p.confidence==='medium' ? '\ud83e\udd14' : '\ud83c\udfb2';
+    return '<div class="card pred-card">' +
+      '<span class="pred-type ' + p.type + '">' + (p.type==='stock'?'\ud83d\udcc8 Stock':'\ud83d\udcac Custom') + '</span>' +
+      '<h3>' + escHtml(title.length>80 ? title.slice(0,80)+'\u2026' : title) + '</h3>' +
+      '<div class="pred-meta">' +
+        '<span>\ud83d\udcc5 ' + deadlineStr + '</span>' +
+        '<span>' + confEmoji + ' Confidence: ' + p.confidence + (p.type==='stock'?' \u00b7 '+p.exchange:' \u00b7 '+p.category) + '</span>' +
+        (p.reasoning ? '<span style="font-style:italic">"' + escHtml(p.reasoning.slice(0,100)) + '"</span>' : '') +
+      '</div>' +
+      '<span class="pred-status ' + statusClass + '">' + statusText + '</span>' +
+      '<div class="pred-actions">' +
+        (p.status==='pending' ? '<button class="resolve-correct" onclick="openResolve(\'' + p.id + '\')">Resolve</button>' : '') +
+        '<button onclick="deletePrediction(\'' + p.id + '\')">Delete</button>' +
+      '</div></div>';
   }).join('');
   updateStats();
 }
 
 function updateStats() {
-  const total = predictions.length;
-  const pending = predictions.filter(p=>p.status==='pending').length;
-  const correct = predictions.filter(p=>p.result==='correct').length;
-  const wrong = predictions.filter(p=>p.result==='wrong').length;
-  const resolved = correct + wrong;
+  var total = predictions.length;
+  var pending = predictions.filter(function(p){return p.status==='pending';}).length;
+  var correct = predictions.filter(function(p){return p.result==='correct';}).length;
+  var wrong = predictions.filter(function(p){return p.result==='wrong';}).length;
+  var resolved = correct + wrong;
   document.getElementById('statTotal').textContent = total;
   document.getElementById('statPending').textContent = pending;
   document.getElementById('statCorrect').textContent = correct;
   document.getElementById('statWrong').textContent = wrong;
-  document.getElementById('statAccuracy').textContent = resolved > 0 ? Math.round(correct/resolved*100)+'%' : '—';
+  document.getElementById('statAccuracy').textContent = resolved > 0 ? Math.round(correct/resolved*100)+'%' : '\u2014';
 }
 
-function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
 
 // ===== RESOLVE =====
 function openResolve(id) {
   resolvingId = id;
-  const p = predictions.find(x=>x.id===id);
-  const title = p.type==='stock' ? `${p.ticker} ${p.direction} $${p.targetPrice}` : p.text;
-  document.getElementById('resolveText').textContent = `"${title}" — Was this prediction correct?`;
+  var p = predictions.find(function(x){return x.id===id;});
+  var title = p.type==='stock' ? p.ticker + ' ' + p.direction + ' $' + p.targetPrice : p.text;
+  document.getElementById('resolveText').textContent = '"' + title + '" \u2014 Was this prediction correct?';
   document.getElementById('resolveModal').classList.add('show');
 }
 function closeResolveModal() { document.getElementById('resolveModal').classList.remove('show'); resolvingId=null; }
 function resolvePrediction(result) {
-  const p = predictions.find(x=>x.id===resolvingId);
+  var p = predictions.find(function(x){return x.id===resolvingId;});
   if (p) { p.status='resolved'; p.result=result; p.resolvedAt=new Date().toISOString(); save(); }
   closeResolveModal();
   renderPredictions();
-  showToast(result==='correct' ? '🎯 Nice call!' : '❌ Better luck next time.');
+  showToast(result==='correct' ? '\ud83c\udfaf Nice call!' : '\u274c Better luck next time.');
 }
 function deletePrediction(id) {
-  predictions = predictions.filter(x=>x.id!==id);
+  predictions = predictions.filter(function(x){return x.id!==id;});
   save();
   renderPredictions();
-  showToast('🗑 Prediction deleted.');
+  showToast('\ud83d\uddd1 Prediction deleted.');
 }
 
 // ===== NOTIFICATIONS =====
 function scheduleNotification(pred) {
   if (!('Notification' in window)) return;
   if (Notification.permission === 'default') Notification.requestPermission();
-  const ms = new Date(pred.deadline) - new Date();
-  if (ms > 0 && ms < 2147483647) { // max setTimeout
-    setTimeout(() => {
+  var ms = new Date(pred.deadline) - new Date();
+  if (ms > 0 && ms < 2147483647) {
+    setTimeout(function() {
       if (Notification.permission === 'granted') {
-        const title = pred.type==='stock' ? `${pred.ticker} prediction deadline!` : 'Prediction deadline!';
-        const body = pred.type==='stock' 
-          ? `Time to check: ${pred.ticker} ${pred.direction} $${pred.targetPrice}` 
+        var title = pred.type==='stock' ? pred.ticker + ' prediction deadline!' : 'Prediction deadline!';
+        var body = pred.type==='stock'
+          ? 'Time to check: ' + pred.ticker + ' ' + pred.direction + ' $' + pred.targetPrice
           : pred.text.slice(0,100);
-        new Notification(title, { body, icon:'🔮' });
-        showToast(`⏰ Prediction expired: ${title}`);
+        new Notification(title, { body: body });
+        showToast('\u23f0 Prediction expired: ' + title);
       }
     }, ms);
   }
 }
 
 function checkExpired() {
-  const now = new Date();
-  predictions.filter(p=>p.status==='pending' && new Date(p.deadline)<=now).forEach(p => {
-    showToast(`⏰ "${p.type==='stock'?p.ticker:p.text.slice(0,30)}…" has expired — resolve it!`);
+  var now = new Date();
+  predictions.filter(function(p){return p.status==='pending' && new Date(p.deadline)<=now;}).forEach(function(p) {
+    showToast('\u23f0 "' + (p.type==='stock'?p.ticker:p.text.slice(0,30)) + '\u2026" has expired \u2014 resolve it!');
   });
 }
 
-// Re-schedule all pending on load
-predictions.filter(p=>p.status==='pending').forEach(scheduleNotification);
+predictions.filter(function(p){return p.status==='pending';}).forEach(scheduleNotification);
 
 // ===== TOAST =====
 function showToast(msg) {
-  const c = document.getElementById('toastContainer');
-  const t = document.createElement('div');
+  var c = document.getElementById('toastContainer');
+  var t = document.createElement('div');
   t.className = 'toast';
   t.textContent = msg;
   c.appendChild(t);
-  setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(),300); }, 4000);
+  setTimeout(function(){ t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(function(){t.remove();},300); }, 4000);
 }
+
 
 // ===== ANALYSIS =====
 function renderAnalysis() {
-  const cont = document.getElementById('analysisContent');
-  const resolved = predictions.filter(p=>p.status!=='pending');
+  var cont = document.getElementById('analysisContent');
+  var resolved = predictions.filter(function(p){return p.status!=='pending';});
   if (resolved.length < 2) {
-    cont.innerHTML = `<div class="card" style="text-align:center;padding:3rem"><div style="font-size:2.5rem;margin-bottom:1rem">📊</div><h3>Not enough data yet</h3><p style="color:var(--text2);margin-top:.5rem">Resolve at least 2 predictions to see your analysis.</p></div>`;
+    cont.innerHTML = '<div class="card" style="text-align:center;padding:3rem"><div style="font-size:2.5rem;margin-bottom:1rem">\ud83d\udcca</div><h3>Not enough data yet</h3><p style="color:var(--text2);margin-top:.5rem">Resolve at least 2 predictions to see your analysis.</p></div>';
     return;
   }
-  const correct = resolved.filter(p=>p.result==='correct').length;
-  const total = resolved.length;
-  const accuracy = Math.round(correct/total*100);
+  var correct = resolved.filter(function(p){return p.result==='correct';}).length;
+  var total = resolved.length;
+  var accuracy = Math.round(correct/total*100);
 
-  // By type
-  const byType = {};
-  resolved.forEach(p => {
-    const k = p.type;
+  var byType = {};
+  resolved.forEach(function(p) {
+    var k = p.type;
     if (!byType[k]) byType[k] = {correct:0,total:0};
     byType[k].total++;
     if (p.result==='correct') byType[k].correct++;
   });
-
-  // By confidence
-  const byConf = {};
-  resolved.forEach(p => {
-    const k = p.confidence||'medium';
+  var byConf = {};
+  resolved.forEach(function(p) {
+    var k = p.confidence||'medium';
     if (!byConf[k]) byConf[k] = {correct:0,total:0};
     byConf[k].total++;
     if (p.result==='correct') byConf[k].correct++;
   });
-
-  // By category (custom only)
-  const byCat = {};
-  resolved.filter(p=>p.type==='custom').forEach(p => {
-    const k = p.category||'other';
+  var byCat = {};
+  resolved.filter(function(p){return p.type==='custom';}).forEach(function(p) {
+    var k = p.category||'other';
     if (!byCat[k]) byCat[k] = {correct:0,total:0};
     byCat[k].total++;
     if (p.result==='correct') byCat[k].correct++;
   });
 
-  const makeBar = (label, correct, total) => {
-    const pct = Math.round(correct/total*100);
-    const color = pct >= 60 ? 'var(--green)' : pct >= 40 ? 'var(--yellow)' : 'var(--red)';
-    return `<div class="bar-group"><div class="bar-value" style="color:${color}">${pct}%</div><div class="bar" style="height:${Math.max(pct,5)}%;background:${color}"></div><div class="bar-label">${label}<br><span style="font-size:.65rem">${correct}/${total}</span></div></div>`;
-  };
-
-  let html = `
-    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:2rem">
-      <div class="card stat-card"><div class="stat-value" style="color:${accuracy>=60?'var(--green)':accuracy>=40?'var(--yellow)':'var(--red)'}">${accuracy}%</div><div class="stat-label">Overall Accuracy</div></div>
-      <div class="card stat-card"><div class="stat-value">${total}</div><div class="stat-label">Resolved</div></div>
-      <div class="card stat-card"><div class="stat-value">${predictions.filter(p=>p.status==='pending').length}</div><div class="stat-label">Still Pending</div></div>
-    </div>
-    <h3 style="margin-bottom:1rem">Accuracy by Type</h3>
-    <div class="chart-container"><div class="bar-chart">${Object.entries(byType).map(([k,v])=>makeBar(k,v.correct,v.total)).join('')}</div></div>
-    <h3 style="margin-bottom:1rem">Accuracy by Confidence Level</h3>
-    <div class="chart-container"><div class="bar-chart">${['low','medium','high'].filter(k=>byConf[k]).map(k=>makeBar(k,byConf[k].correct,byConf[k].total)).join('')}</div></div>
-  `;
-  if (Object.keys(byCat).length > 0) {
-    html += `<h3 style="margin-bottom:1rem">Custom Predictions by Category</h3><div class="chart-container"><div class="bar-chart">${Object.entries(byCat).map(([k,v])=>makeBar(k,v.correct,v.total)).join('')}</div></div>`;
+  function makeBar(label, c, t) {
+    var pct = Math.round(c/t*100);
+    var color = pct >= 60 ? 'var(--green)' : pct >= 40 ? 'var(--yellow)' : 'var(--red)';
+    return '<div class="bar-group"><div class="bar-value" style="color:'+color+'">'+pct+'%</div><div class="bar" style="height:'+Math.max(pct,5)+'%;background:'+color+'"></div><div class="bar-label">'+label+'<br><span style="font-size:.65rem">'+c+'/'+t+'</span></div></div>';
   }
 
-  // Insight text
-  const highConf = byConf['high'];
-  const lowConf = byConf['low'];
-  let insights = [];
+  var accColor = accuracy>=60?'var(--green)':accuracy>=40?'var(--yellow)':'var(--red)';
+  var html = '<div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:2rem">';
+  html += '<div class="card stat-card"><div class="stat-value" style="color:'+accColor+'">'+accuracy+'%</div><div class="stat-label">Overall Accuracy</div></div>';
+  html += '<div class="card stat-card"><div class="stat-value">'+total+'</div><div class="stat-label">Resolved</div></div>';
+  html += '<div class="card stat-card"><div class="stat-value">'+predictions.filter(function(p){return p.status==='pending';}).length+'</div><div class="stat-label">Still Pending</div></div></div>';
+
+  html += '<h3 style="margin-bottom:1rem">Accuracy by Type</h3><div class="chart-container"><div class="bar-chart">';
+  Object.keys(byType).forEach(function(k){ html += makeBar(k, byType[k].correct, byType[k].total); });
+  html += '</div></div>';
+
+  html += '<h3 style="margin-bottom:1rem">Accuracy by Confidence Level</h3><div class="chart-container"><div class="bar-chart">';
+  ['low','medium','high'].forEach(function(k){ if(byConf[k]) html += makeBar(k, byConf[k].correct, byConf[k].total); });
+  html += '</div></div>';
+
+  if (Object.keys(byCat).length > 0) {
+    html += '<h3 style="margin-bottom:1rem">Custom Predictions by Category</h3><div class="chart-container"><div class="bar-chart">';
+    Object.keys(byCat).forEach(function(k){ html += makeBar(k, byCat[k].correct, byCat[k].total); });
+    html += '</div></div>';
+  }
+
+  // Local insights
+  var insights = [];
+  var highConf = byConf['high'];
+  var lowConf = byConf['low'];
   if (highConf && highConf.total >= 2) {
-    const hPct = Math.round(highConf.correct/highConf.total*100);
-    if (hPct < 50) insights.push('⚠️ Your high-confidence predictions are underperforming. You might be overconfident.');
-    if (hPct >= 75) insights.push('🔥 Your high-confidence calls are landing well. Trust your gut more.');
+    var hPct = Math.round(highConf.correct/highConf.total*100);
+    if (hPct < 50) insights.push('\u26a0\ufe0f Your high-confidence predictions are underperforming. You might be overconfident.');
+    if (hPct >= 75) insights.push('\ud83d\udd25 Your high-confidence calls are landing well. Trust your gut more.');
   }
   if (lowConf && lowConf.total >= 2) {
-    const lPct = Math.round(lowConf.correct/lowConf.total*100);
-    if (lPct > 60) insights.push('🎲 Your "wild guesses" are surprisingly accurate. You may know more than you think.');
-  }
-  if (byType['stock'] && byType['custom']) {
-    const sPct = Math.round(byType['stock'].correct/byType['stock'].total*100);
-    const cPct = Math.round(byType['custom'].correct/byType['custom'].total*100);
-    if (sPct > cPct + 15) insights.push('📈 You\'re better at stock predictions than life predictions.');
-    if (cPct > sPct + 15) insights.push('💬 You\'re better at life predictions than stock calls.');
+    var lPct = Math.round(lowConf.correct/lowConf.total*100);
+    if (lPct > 60) insights.push('\ud83c\udfb2 Your "wild guesses" are surprisingly accurate. You may know more than you think.');
   }
   if (insights.length > 0) {
-    html += `<div class="card" style="margin-top:1.5rem;border-color:var(--accent)"><h3 style="margin-bottom:.8rem">💡 Insights</h3>${insights.map(i=>`<p style="color:var(--text2);margin-bottom:.4rem">${i}</p>`).join('')}</div>`;
+    html += '<div class="card" style="margin-top:1.5rem;border-color:var(--accent)"><h3 style="margin-bottom:.8rem">\ud83d\udca1 Quick Insights</h3>';
+    insights.forEach(function(i){ html += '<p style="color:var(--text2);margin-bottom:.4rem">'+i+'</p>'; });
+    html += '</div>';
   }
+
+  // AI Analysis button
+  html += '<div style="margin-top:2rem;text-align:center"><button class="btn btn-primary" onclick="runAIAnalysis()" id="aiAnalyzeBtn">\ud83e\udd16 Deep Analysis with Groq AI</button></div>';
+  html += '<div id="aiInsights" style="margin-top:1.5rem"></div>';
 
   cont.innerHTML = html;
 }
 
-// Request notification permission on load
+
+async function runAIAnalysis() {
+  var btn = document.getElementById('aiAnalyzeBtn');
+  btn.textContent = 'Analyzing...';
+  btn.disabled = true;
+  try {
+    var resp = await fetch(API_BASE + '/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ predictions: predictions }),
+    });
+    var data = await resp.json();
+    if (data.error) { showToast('\u26a0\ufe0f ' + data.error); btn.textContent = '\ud83e\udd16 Deep Analysis with Groq AI'; btn.disabled = false; return; }
+    var h = '<div class="card" style="border-color:var(--accent)">';
+    h += '<h3 style="margin-bottom:1rem">\ud83e\udd16 AI Deep Analysis</h3>';
+    h += '<p style="margin-bottom:1rem;font-size:1.05rem">' + (data.summary || '') + '</p>';
+    h += '<p style="margin-bottom:.5rem"><strong>Calibration:</strong> ' + (data.calibration || 'N/A') + '</p>';
+    if (data.strengths && data.strengths.length) h += '<p style="margin-bottom:.5rem"><strong>\ud83d\udcaa Strengths:</strong> ' + data.strengths.join(', ') + '</p>';
+    if (data.weaknesses && data.weaknesses.length) h += '<p style="margin-bottom:.5rem"><strong>\u26a0\ufe0f Weaknesses:</strong> ' + data.weaknesses.join(', ') + '</p>';
+    if (data.patterns && data.patterns.length) h += '<p style="margin-bottom:.5rem"><strong>\ud83d\udd0d Patterns:</strong> ' + data.patterns.join(', ') + '</p>';
+    if (data.recommendations && data.recommendations.length) {
+      h += '<p style="margin-bottom:.5rem"><strong>\ud83d\udca1 Recommendations:</strong></p><ul style="margin-left:1.5rem;color:var(--text2)">';
+      data.recommendations.forEach(function(r){ h += '<li>' + r + '</li>'; });
+      h += '</ul>';
+    }
+    if (data.blind_spots && data.blind_spots.length) h += '<p style="margin-top:.5rem"><strong>\ud83d\udc41 Blind Spots:</strong> ' + data.blind_spots.join(', ') + '</p>';
+    h += '</div>';
+    document.getElementById('aiInsights').innerHTML = h;
+    btn.textContent = '\ud83e\udd16 Re-analyze';
+    btn.disabled = false;
+  } catch(e) { showToast('\u26a0\ufe0f Analysis failed'); btn.textContent = '\ud83e\udd16 Deep Analysis with Groq AI'; btn.disabled = false; }
+}
+
+// ===== INIT =====
 if ('Notification' in window && Notification.permission === 'default') {
   Notification.requestPermission();
 }
 
-// Close modal on overlay click
-document.querySelectorAll('.modal-overlay').forEach(m => {
-  m.addEventListener('click', e => { if(e.target===m) { m.classList.remove('show'); resolvingId=null; }});
+document.querySelectorAll('.modal-overlay').forEach(function(m) {
+  m.addEventListener('click', function(e) { if(e.target===m) { m.classList.remove('show'); resolvingId=null; }});
 });
 
-// Close ticker results on outside click
-document.addEventListener('click', e => {
+document.addEventListener('click', function(e) {
   if (!e.target.closest('.ticker-search-wrap')) document.getElementById('tickerResults').classList.remove('show');
 });
 </script>

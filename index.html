@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prediction Tracker — Sharpen Your Judgment</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0a;--surface:#141414;--surface2:#1e1e1e;--border:#2a2a2a;
+  --text:#f0f0f0;--text2:#888;--accent:#7c6aff;--accent2:#ff6a9f;
+  --green:#34d399;--red:#f87171;--yellow:#fbbf24;
+  --radius:16px;--radius-sm:10px;
+}
+html{scroll-behavior:smooth}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;overflow-x:hidden}
+a{color:var(--accent);text-decoration:none}
+button{cursor:pointer;font-family:inherit}
+input,select,textarea{font-family:inherit;font-size:1rem}
+
+/* ===== HERO ===== */
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(124,106,255,.15),transparent 70%);top:-100px;right:-200px;pointer-events:none}
+.hero::after{content:'';position:absolute;width:500px;height:500px;border-radius:50%;background:radial-gradient(circle,rgba(255,106,159,.1),transparent 70%);bottom:-100px;left:-200px;pointer-events:none}
+.hero-badge{display:inline-block;padding:.4rem 1rem;border:1px solid var(--border);border-radius:999px;font-size:.8rem;color:var(--text2);margin-bottom:1.5rem;letter-spacing:.5px}
+.hero h1{font-size:clamp(2.5rem,6vw,5rem);font-weight:800;line-height:1.1;margin-bottom:1rem}
+.hero h1 .gradient{background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero p{font-size:1.2rem;color:var(--text2);max-width:560px;margin-bottom:2rem}
+.hero-cta{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center}
+.btn{display:inline-flex;align-items:center;gap:.5rem;padding:.85rem 2rem;border-radius:999px;font-weight:600;font-size:1rem;border:none;transition:all .2s}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ===== NAV ===== */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:1rem 2rem;display:flex;justify-content:space-between;align-items:center;background:rgba(10,10,10,.8);backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
+nav .logo{font-weight:800;font-size:1.3rem}
+nav .logo span{color:var(--accent)}
+nav .nav-links{display:flex;gap:1.5rem;align-items:center}
+nav .nav-links a{color:var(--text2);font-size:.9rem;transition:color .2s}
+nav .nav-links a:hover{color:var(--text)}
+
+/* ===== SECTIONS ===== */
+section{padding:5rem 2rem;max-width:1100px;margin:0 auto}
+.section-title{font-size:clamp(1.8rem,4vw,3rem);font-weight:800;margin-bottom:.5rem}
+.section-sub{color:var(--text2);font-size:1.1rem;margin-bottom:3rem;max-width:600px}
+
+/* ===== CARDS ===== */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;transition:border-color .2s}
+.card:hover{border-color:var(--accent)}
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1.5rem}
+
+/* ===== APP SECTION ===== */
+#app{display:none}
+.app-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;margin-bottom:2rem}
+.tabs{display:flex;gap:.5rem;background:var(--surface);border-radius:var(--radius-sm);padding:.3rem;border:1px solid var(--border)}
+.tab{padding:.6rem 1.2rem;border-radius:8px;border:none;background:transparent;color:var(--text2);font-weight:500;font-size:.9rem;transition:all .2s}
+.tab.active{background:var(--accent);color:#fff}
+
+/* ===== FORMS ===== */
+.form-group{margin-bottom:1.2rem}
+.form-group label{display:block;font-size:.85rem;color:var(--text2);margin-bottom:.4rem;font-weight:500}
+.form-input{width:100%;padding:.75rem 1rem;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:1rem;transition:border-color .2s}
+.form-input:focus{outline:none;border-color:var(--accent)}
+select.form-input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23888' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 1rem center}
+textarea.form-input{min-height:80px;resize:vertical}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+
+/* ===== PREDICTION CARDS ===== */
+.pred-card{position:relative;overflow:hidden}
+.pred-card .pred-type{display:inline-block;padding:.2rem .7rem;border-radius:999px;font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.pred-type.stock{background:rgba(124,106,255,.15);color:var(--accent)}
+.pred-type.custom{background:rgba(255,106,159,.15);color:var(--accent2)}
+.pred-card h3{font-size:1.1rem;margin:.8rem 0 .3rem}
+.pred-card .pred-meta{color:var(--text2);font-size:.85rem;display:flex;flex-direction:column;gap:.2rem;margin-bottom:.8rem}
+.pred-status{display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .8rem;border-radius:999px;font-size:.75rem;font-weight:600}
+.status-pending{background:rgba(251,191,36,.1);color:var(--yellow)}
+.status-correct{background:rgba(52,211,153,.1);color:var(--green)}
+.status-wrong{background:rgba(248,113,113,.1);color:var(--red)}
+.pred-actions{display:flex;gap:.5rem;margin-top:1rem}
+.pred-actions button{padding:.4rem .8rem;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:.8rem;transition:all .2s}
+.pred-actions button:hover{border-color:var(--accent);color:var(--accent)}
+.pred-actions button.resolve-correct:hover{border-color:var(--green);color:var(--green)}
+.pred-actions button.resolve-wrong:hover{border-color:var(--red);color:var(--red)}
+
+/* ===== VOICE BTN ===== */
+.voice-btn{width:48px;height:48px;border-radius:50%;border:2px solid var(--accent);background:transparent;color:var(--accent);display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
+.voice-btn:hover,.voice-btn.recording{background:var(--accent);color:#fff}
+.voice-btn.recording{animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(124,106,255,.4)}50%{box-shadow:0 0 0 12px rgba(124,106,255,0)}}
+
+/* ===== STATS ===== */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem;margin-bottom:2rem}
+.stat-card{text-align:center;padding:1.5rem}
+.stat-card .stat-value{font-size:2.5rem;font-weight:800}
+.stat-card .stat-label{color:var(--text2);font-size:.85rem;margin-top:.3rem}
+
+/* ===== TICKER SEARCH ===== */
+.ticker-search-wrap{position:relative}
+.ticker-results{position:absolute;top:100%;left:0;right:0;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);max-height:200px;overflow-y:auto;z-index:10;display:none}
+.ticker-results.show{display:block}
+.ticker-result-item{padding:.6rem 1rem;cursor:pointer;font-size:.9rem;transition:background .15s}
+.ticker-result-item:hover{background:var(--surface)}
+.ticker-result-item .ticker-symbol{font-weight:700;color:var(--accent)}
+.current-price{font-size:.9rem;color:var(--green);margin-top:.5rem;font-weight:600}
+
+/* ===== TOAST ===== */
+.toast-container{position:fixed;bottom:2rem;right:2rem;z-index:200;display:flex;flex-direction:column;gap:.5rem}
+.toast{padding:1rem 1.5rem;border-radius:var(--radius-sm);background:var(--surface);border:1px solid var(--border);font-size:.9rem;animation:slideIn .3s ease;max-width:350px}
+@keyframes slideIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+
+/* ===== MODAL ===== */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:150;display:none;align-items:center;justify-content:center;padding:1rem}
+.modal-overlay.show{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:2rem;max-width:500px;width:100%;max-height:90vh;overflow-y:auto}
+.modal h2{margin-bottom:1.5rem}
+
+/* ===== RESPONSIVE ===== */
+@media(max-width:640px){
+  .form-row{grid-template-columns:1fr}
+  .stats-grid{grid-template-columns:1fr 1fr}
+  nav .nav-links{gap:.8rem}
+}
+
+/* ===== ANALYSIS CHART ===== */
+.chart-container{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin-bottom:2rem}
+.bar-chart{display:flex;align-items:flex-end;gap:.5rem;height:200px;padding-top:1rem}
+.bar-group{flex:1;display:flex;flex-direction:column;align-items:center;gap:.3rem}
+.bar{border-radius:6px 6px 0 0;min-height:4px;width:100%;max-width:60px;transition:height .5s ease}
+.bar-label{font-size:.7rem;color:var(--text2);text-align:center}
+.bar-value{font-size:.75rem;font-weight:700}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo"><span>↗</span> Predict.</div>
+  <div class="nav-links">
+    <a href="#" onclick="showLanding()">Home</a>
+    <a href="#" onclick="showApp()">Dashboard</a>
+    <a href="#" onclick="showAnalysis()">Analysis</a>
+  </div>
+</nav>
+
+<!-- ===== HERO / LANDING ===== -->
+<div id="landing">
+<section class="hero">
+  <div class="hero-badge">🧠 Train your judgment. Track your predictions.</div>
+  <h1>Predict. Track.<br><span class="gradient">Get Better.</span></h1>
+  <p>Log stock price predictions & life forecasts. Get notified when they resolve. Analyze your accuracy over time. Become a sharper thinker.</p>
+  <div class="hero-cta">
+    <button class="btn btn-primary" onclick="showApp()">Start Predicting →</button>
+    <a href="#features" class="btn btn-ghost">See Features</a>
+  </div>
+</section>
+
+<section id="features">
+  <h2 class="section-title">Three ways to sharpen your edge.</h2>
+  <p class="section-sub">Every prediction is a data point about how you think.</p>
+  <div class="cards-grid">
+    <div class="card">
+      <div style="font-size:2rem;margin-bottom:.8rem">📈</div>
+      <h3 style="font-size:1.2rem;margin-bottom:.5rem">Stock Predictions</h3>
+      <p style="color:var(--text2);font-size:.9rem">Select a ticker, set your price target and deadline. We fetch real-time prices to verify your call.</p>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1rem">
+        <span style="padding:.2rem .6rem;background:var(--surface2);border-radius:999px;font-size:.75rem;color:var(--text2)">Real-time Price</span>
+        <span style="padding:.2rem .6rem;background:var(--surface2);border-radius:999px;font-size:.75rem;color:var(--text2)">Auto-resolve</span>
+        <span style="padding:.2rem .6rem;background:var(--surface2);border-radius:999px;font-size:.75rem;color:var(--text2)">Ticker Search</span>
+      </div>
+    </div>
+    <div class="card">
+      <div style="font-size:2rem;margin-bottom:.8rem">🎙️</div>
+      <h3 style="font-size:1.2rem;margin-bottom:.5rem">Voice Predictions</h3>
+      <p style="color:var(--text2);font-size:.9rem">Speak your prediction naturally. Voice recognition captures your forecast about work, life, or anything.</p>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1rem">
+        <span style="padding:.2rem .6rem;background:var(--surface2);border-radius:999px;font-size:.75rem;color:var(--text2)">Speech-to-Text</span>
+        <span style="padding:.2rem .6rem;background:var(--surface2);border-radius:999px;font-size:.75rem;color:var(--text2)">Natural Language</span>
+      </div>
+    </div>
+    <div class="card">
+      <div style="font-size:2rem;margin-bottom:.8rem">📊</div>
+      <h3 style="font-size:1.2rem;margin-bottom:.5rem">Deep Analysis</h3>
+      <p style="color:var(--text2);font-size:.9rem">After enough data points, see your accuracy by category, time horizon, and confidence level. Learn your blind spots.</p>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1rem">
+        <span style="padding:.2rem .6rem;background:var(--surface2);border-radius:999px;font-size:.75rem;color:var(--text2)">Accuracy Rate</span>
+        <span style="padding:.2rem .6rem;background:var(--surface2);border-radius:999px;font-size:.75rem;color:var(--text2)">Category Breakdown</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2 class="section-title">How it works.</h2>
+  <p class="section-sub">Three steps to better judgment.</p>
+  <div class="cards-grid" style="grid-template-columns:repeat(3,1fr)">
+    <div class="card" style="text-align:center;padding:2rem">
+      <div style="font-size:3rem;font-weight:800;color:var(--accent);margin-bottom:.5rem">1</div>
+      <h3 style="margin-bottom:.5rem">Make a prediction</h3>
+      <p style="color:var(--text2);font-size:.9rem">Pick a stock ticker or speak a custom forecast. Set your deadline and confidence.</p>
+    </div>
+    <div class="card" style="text-align:center;padding:2rem">
+      <div style="font-size:3rem;font-weight:800;color:var(--accent);margin-bottom:.5rem">2</div>
+      <h3 style="margin-bottom:.5rem">Wait & get notified</h3>
+      <p style="color:var(--text2);font-size:.9rem">When the deadline hits, you'll get a browser notification with the result.</p>
+    </div>
+    <div class="card" style="text-align:center;padding:2rem">
+      <div style="font-size:3rem;font-weight:800;color:var(--accent);margin-bottom:.5rem">3</div>
+      <h3 style="margin-bottom:.5rem">Analyze & improve</h3>
+      <p style="color:var(--text2);font-size:.9rem">Review accuracy across categories. Discover where you're sharp — and where you're not.</p>
+    </div>
+  </div>
+</section>
+
+<section style="text-align:center;padding:6rem 2rem">
+  <h2 class="section-title">Your judgment is a skill.<br><span style="background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent">Train it.</span></h2>
+  <p class="section-sub" style="margin:1rem auto 2rem">Start logging predictions. Get smarter every week.</p>
+  <button class="btn btn-primary" onclick="showApp()" style="font-size:1.1rem;padding:1rem 2.5rem">Open Dashboard →</button>
+</section>
+</div>
+
+
+<!-- ===== APP DASHBOARD ===== -->
+<div id="app">
+<section style="padding-top:6rem">
+  <div class="app-header">
+    <h2 class="section-title" style="margin-bottom:0">Dashboard</h2>
+    <div style="display:flex;gap:.8rem;align-items:center">
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab(this,'all')">All</button>
+        <button class="tab" onclick="switchTab(this,'pending')">Pending</button>
+        <button class="tab" onclick="switchTab(this,'resolved')">Resolved</button>
+      </div>
+      <button class="btn btn-primary" onclick="openNewModal('stock')" style="padding:.6rem 1.2rem;font-size:.9rem">+ Stock</button>
+      <button class="btn btn-ghost" onclick="openNewModal('custom')" style="padding:.6rem 1.2rem;font-size:.9rem">+ Custom</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-grid" id="statsGrid">
+    <div class="card stat-card"><div class="stat-value" id="statTotal">0</div><div class="stat-label">Total</div></div>
+    <div class="card stat-card"><div class="stat-value" id="statPending">0</div><div class="stat-label">Pending</div></div>
+    <div class="card stat-card"><div class="stat-value" style="color:var(--green)" id="statCorrect">0</div><div class="stat-label">Correct</div></div>
+    <div class="card stat-card"><div class="stat-value" style="color:var(--red)" id="statWrong">0</div><div class="stat-label">Wrong</div></div>
+    <div class="card stat-card"><div class="stat-value" style="color:var(--accent)" id="statAccuracy">—</div><div class="stat-label">Accuracy</div></div>
+  </div>
+
+  <!-- Prediction list -->
+  <div class="cards-grid" id="predictionList"></div>
+  <div id="emptyState" style="text-align:center;padding:4rem 1rem;color:var(--text2);display:none">
+    <div style="font-size:3rem;margin-bottom:1rem">🔮</div>
+    <p style="font-size:1.1rem">No predictions yet. Make your first call.</p>
+  </div>
+</section>
+</div>
+
+<!-- ===== ANALYSIS PAGE ===== -->
+<div id="analysisPage" style="display:none">
+<section style="padding-top:6rem">
+  <h2 class="section-title" style="margin-bottom:2rem">Analysis</h2>
+  <div id="analysisContent"></div>
+</section>
+</div>
+
+<!-- ===== MODAL: New Prediction ===== -->
+<div class="modal-overlay" id="newModal">
+<div class="modal">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
+    <h2 id="modalTitle" style="margin:0">New Prediction</h2>
+    <button onclick="closeModal()" style="background:none;border:none;color:var(--text2);font-size:1.3rem">✕</button>
+  </div>
+
+  <!-- Stock form -->
+  <form id="stockForm" style="display:none" onsubmit="return submitStock(event)">
+    <div class="form-group">
+      <label>Ticker</label>
+      <div class="ticker-search-wrap">
+        <input type="text" class="form-input" id="tickerInput" placeholder="Search e.g. MSFT, AAPL…" autocomplete="off" oninput="searchTicker(this.value)">
+        <div class="ticker-results" id="tickerResults"></div>
+      </div>
+      <div id="tickerInfo" style="margin-top:.5rem"></div>
+    </div>
+    <div class="form-group">
+      <label>Exchange</label>
+      <select class="form-input" id="exchangeInput">
+        <option value="NASDAQ">NASDAQ</option>
+        <option value="NYSE">NYSE</option>
+        <option value="TPE">TPE</option>
+        <option value="TYO">TYO</option>
+        <option value="LON">LON</option>
+        <option value="SHA">SHA</option>
+        <option value="SHE">SHE</option>
+        <option value="HKG">HKG</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Direction</label>
+        <select class="form-input" id="directionInput">
+          <option value="above">Price will be ABOVE</option>
+          <option value="below">Price will be BELOW</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Target Price ($)</label>
+        <input type="number" step="0.01" class="form-input" id="targetPrice" required placeholder="e.g. 450">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Deadline</label>
+        <input type="datetime-local" class="form-input" id="stockDeadline" required>
+      </div>
+      <div class="form-group">
+        <label>Confidence</label>
+        <select class="form-input" id="stockConfidence">
+          <option value="low">Low (wild guess)</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High (very confident)</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Reasoning (optional)</label>
+      <textarea class="form-input" id="stockReasoning" placeholder="Why do you think this?"></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:.5rem">Save Prediction</button>
+  </form>
+
+  <!-- Custom form -->
+  <form id="customForm" style="display:none" onsubmit="return submitCustom(event)">
+    <div class="form-group">
+      <label>Your Prediction</label>
+      <div style="display:flex;gap:.5rem;align-items:flex-start">
+        <textarea class="form-input" id="customText" placeholder="e.g. Our team will ship the feature by next Friday" required style="flex:1"></textarea>
+        <button type="button" class="voice-btn" id="voiceBtn" onclick="toggleVoice()">🎙</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Category</label>
+      <select class="form-input" id="customCategory">
+        <option value="work">Work</option>
+        <option value="life">Life</option>
+        <option value="tech">Tech / Industry</option>
+        <option value="sports">Sports</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Deadline</label>
+        <input type="datetime-local" class="form-input" id="customDeadline" required>
+      </div>
+      <div class="form-group">
+        <label>Confidence</label>
+        <select class="form-input" id="customConfidence">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Reasoning (optional)</label>
+      <textarea class="form-input" id="customReasoning" placeholder="Why do you think this?"></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:.5rem">Save Prediction</button>
+  </form>
+</div>
+</div>
+
+<!-- ===== RESOLVE MODAL ===== -->
+<div class="modal-overlay" id="resolveModal">
+<div class="modal">
+  <h2 style="margin-bottom:1rem">Resolve Prediction</h2>
+  <p id="resolveText" style="color:var(--text2);margin-bottom:1.5rem"></p>
+  <div style="display:flex;gap:1rem">
+    <button class="btn" style="flex:1;justify-content:center;background:rgba(52,211,153,.15);color:var(--green);border:1px solid var(--green)" onclick="resolvePrediction('correct')">✓ Correct</button>
+    <button class="btn" style="flex:1;justify-content:center;background:rgba(248,113,113,.15);color:var(--red);border:1px solid var(--red)" onclick="resolvePrediction('wrong')">✗ Wrong</button>
+    <button class="btn btn-ghost" style="justify-content:center" onclick="closeResolveModal()">Cancel</button>
+  </div>
+</div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+
+<script>
+// ===== DATA LAYER =====
+const STORE_KEY = 'prediction_tracker_v1';
+let predictions = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+let currentFilter = 'all';
+let resolvingId = null;
+const priceCache = {};
+
+function save() { localStorage.setItem(STORE_KEY, JSON.stringify(predictions)); }
+
+// ===== NAVIGATION =====
+function showLanding() { 
+  document.getElementById('landing').style.display=''; 
+  document.getElementById('app').style.display='none'; 
+  document.getElementById('analysisPage').style.display='none'; 
+}
+function showApp() { 
+  document.getElementById('landing').style.display='none'; 
+  document.getElementById('app').style.display='block'; 
+  document.getElementById('analysisPage').style.display='none'; 
+  renderPredictions(); 
+  checkExpired();
+}
+function showAnalysis() {
+  document.getElementById('landing').style.display='none'; 
+  document.getElementById('app').style.display='none'; 
+  document.getElementById('analysisPage').style.display='block'; 
+  renderAnalysis();
+}
+
+// ===== TABS =====
+function switchTab(el, filter) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  currentFilter = filter;
+  renderPredictions();
+}
+
+// ===== MODAL =====
+function openNewModal(type) {
+  document.getElementById('newModal').classList.add('show');
+  document.getElementById('stockForm').style.display = type==='stock' ? 'block' : 'none';
+  document.getElementById('customForm').style.display = type==='custom' ? 'block' : 'none';
+  document.getElementById('modalTitle').textContent = type==='stock' ? 'New Stock Prediction' : 'New Custom Prediction';
+  // Set default deadline to 1 week from now
+  const d = new Date(); d.setDate(d.getDate()+7);
+  const dl = d.toISOString().slice(0,16);
+  document.getElementById('stockDeadline').value = dl;
+  document.getElementById('customDeadline').value = dl;
+}
+function closeModal() { document.getElementById('newModal').classList.remove('show'); }
+
+// ===== STOCK PRICE FETCHING (Google Finance + fallback) =====
+const POPULAR_TICKERS = [
+  {symbol:'MSFT',name:'Microsoft Corp',exchange:'NASDAQ'},
+  {symbol:'AAPL',name:'Apple Inc',exchange:'NASDAQ'},
+  {symbol:'GOOGL',name:'Alphabet Inc',exchange:'NASDAQ'},
+  {symbol:'AMZN',name:'Amazon.com Inc',exchange:'NASDAQ'},
+  {symbol:'NVDA',name:'NVIDIA Corp',exchange:'NASDAQ'},
+  {symbol:'META',name:'Meta Platforms Inc',exchange:'NASDAQ'},
+  {symbol:'TSLA',name:'Tesla Inc',exchange:'NASDAQ'},
+  {symbol:'JPM',name:'JPMorgan Chase',exchange:'NYSE'},
+  {symbol:'V',name:'Visa Inc',exchange:'NYSE'},
+  {symbol:'WMT',name:'Walmart Inc',exchange:'NYSE'},
+  {symbol:'NFLX',name:'Netflix Inc',exchange:'NASDAQ'},
+  {symbol:'DIS',name:'Walt Disney Co',exchange:'NYSE'},
+  {symbol:'AMD',name:'AMD Inc',exchange:'NASDAQ'},
+  {symbol:'INTC',name:'Intel Corp',exchange:'NASDAQ'},
+  {symbol:'CRM',name:'Salesforce Inc',exchange:'NYSE'},
+  {symbol:'BABA',name:'Alibaba Group',exchange:'NYSE'},
+  {symbol:'TSM',name:'TSMC',exchange:'NYSE'},
+  {symbol:'SPOT',name:'Spotify',exchange:'NYSE'},
+  {symbol:'COIN',name:'Coinbase',exchange:'NASDAQ'},
+  {symbol:'PLTR',name:'Palantir',exchange:'NASDAQ'},
+];
+
+function searchTicker(q) {
+  const results = document.getElementById('tickerResults');
+  if (!q || q.length < 1) { results.classList.remove('show'); return; }
+  const upper = q.toUpperCase();
+  const matches = POPULAR_TICKERS.filter(t => t.symbol.includes(upper) || t.name.toUpperCase().includes(upper)).slice(0,6);
+  if (matches.length === 0) {
+    // Allow custom ticker
+    results.innerHTML = `<div class="ticker-result-item" onclick="selectTicker('${upper}','','')"><span class="ticker-symbol">${upper}</span> — Use custom ticker</div>`;
+  } else {
+    results.innerHTML = matches.map(t => 
+      `<div class="ticker-result-item" onclick="selectTicker('${t.symbol}','${t.name}','${t.exchange}')"><span class="ticker-symbol">${t.symbol}</span> — ${t.name} <span style="color:var(--text2);font-size:.75rem">${t.exchange}</span></div>`
+    ).join('');
+  }
+  results.classList.add('show');
+}
+
+async function selectTicker(symbol, name, exchange) {
+  document.getElementById('tickerInput').value = symbol;
+  document.getElementById('tickerResults').classList.remove('show');
+  if (exchange) document.getElementById('exchangeInput').value = exchange;
+  // Fetch current price
+  document.getElementById('tickerInfo').innerHTML = `<span style="color:var(--text2);font-size:.85rem">Fetching price for ${symbol}…</span>`;
+  const price = await fetchStockPrice(symbol, exchange || document.getElementById('exchangeInput').value);
+  if (price !== null) {
+    document.getElementById('tickerInfo').innerHTML = `<span class="current-price">Current price: $${price.toFixed(2)}</span>${name ? ` <span style="color:var(--text2);font-size:.85rem">· ${name}</span>` : ''}`;
+  } else {
+    document.getElementById('tickerInfo').innerHTML = `<span style="color:var(--text2);font-size:.85rem">${name || symbol} — price unavailable (offline mode)</span>`;
+  }
+}
+
+async function fetchStockPrice(ticker, exchange) {
+  const cacheKey = `${ticker}:${exchange}`;
+  const cached = priceCache[cacheKey];
+  if (cached && Date.now() - cached.ts < 5 * 60 * 1000) return cached.price;
+
+  try {
+    // Try Google Finance via CORS proxy (or direct in some environments)
+    const url = `https://www.google.com/finance/quote/${ticker}:${exchange}`;
+    const resp = await fetch(url, { mode: 'no-cors' }).catch(() => null);
+    // no-cors returns opaque response, so we try a public proxy approach
+    // Fallback: use a simple API
+    const apiResp = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`).catch(()=>null);
+    if (apiResp && apiResp.ok) {
+      const data = await apiResp.json();
+      const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+      if (price) {
+        priceCache[cacheKey] = { price, ts: Date.now() };
+        return price;
+      }
+    }
+  } catch(e) {}
+  return null;
+}
+
+// ===== VOICE RECOGNITION =====
+let recognition = null;
+let isRecording = false;
+
+function toggleVoice() {
+  const btn = document.getElementById('voiceBtn');
+  if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+    showToast('⚠️ Speech recognition not supported in this browser. Use Chrome.');
+    return;
+  }
+  if (isRecording) {
+    recognition.stop();
+    return;
+  }
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
+  recognition.lang = 'en-US';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.onstart = () => { isRecording = true; btn.classList.add('recording'); };
+  recognition.onresult = (e) => {
+    const text = e.results[0][0].transcript;
+    document.getElementById('customText').value = text;
+  };
+  recognition.onend = () => { isRecording = false; btn.classList.remove('recording'); };
+  recognition.onerror = (e) => { isRecording = false; btn.classList.remove('recording'); showToast('⚠️ Voice error: ' + e.error); };
+  recognition.start();
+}
+
+// ===== SUBMIT =====
+function submitStock(e) {
+  e.preventDefault();
+  const ticker = document.getElementById('tickerInput').value.trim().toUpperCase();
+  if (!ticker) { showToast('⚠️ Please select a ticker'); return false; }
+  const pred = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    type: 'stock',
+    ticker,
+    exchange: document.getElementById('exchangeInput').value,
+    direction: document.getElementById('directionInput').value,
+    targetPrice: parseFloat(document.getElementById('targetPrice').value),
+    deadline: document.getElementById('stockDeadline').value,
+    confidence: document.getElementById('stockConfidence').value,
+    reasoning: document.getElementById('stockReasoning').value,
+    createdAt: new Date().toISOString(),
+    status: 'pending',
+    result: null,
+    resolvedAt: null,
+  };
+  predictions.unshift(pred);
+  save();
+  closeModal();
+  showApp();
+  showToast('✓ Stock prediction saved!');
+  scheduleNotification(pred);
+  return false;
+}
+
+function submitCustom(e) {
+  e.preventDefault();
+  const pred = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    type: 'custom',
+    text: document.getElementById('customText').value,
+    category: document.getElementById('customCategory').value,
+    deadline: document.getElementById('customDeadline').value,
+    confidence: document.getElementById('customConfidence').value,
+    reasoning: document.getElementById('customReasoning').value,
+    createdAt: new Date().toISOString(),
+    status: 'pending',
+    result: null,
+    resolvedAt: null,
+  };
+  predictions.unshift(pred);
+  save();
+  closeModal();
+  showApp();
+  showToast('✓ Prediction saved!');
+  scheduleNotification(pred);
+  return false;
+}
+
+// ===== RENDER =====
+function renderPredictions() {
+  const list = document.getElementById('predictionList');
+  const empty = document.getElementById('emptyState');
+  let filtered = predictions;
+  if (currentFilter === 'pending') filtered = predictions.filter(p=>p.status==='pending');
+  if (currentFilter === 'resolved') filtered = predictions.filter(p=>p.status!=='pending');
+
+  if (filtered.length === 0) {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+    updateStats();
+    return;
+  }
+  empty.style.display = 'none';
+  list.innerHTML = filtered.map(p => {
+    const isExpired = new Date(p.deadline) <= new Date() && p.status === 'pending';
+    const title = p.type === 'stock' 
+      ? `${p.ticker} ${p.direction === 'above' ? '↑ above' : '↓ below'} $${p.targetPrice}`
+      : p.text;
+    const deadlineStr = new Date(p.deadline).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const statusClass = p.status==='pending' ? (isExpired ? 'status-pending' : 'status-pending') : (p.result==='correct' ? 'status-correct' : 'status-wrong');
+    const statusText = p.status==='pending' ? (isExpired ? '⏰ Expired — resolve now' : '⏳ Pending') : (p.result==='correct' ? '✓ Correct' : '✗ Wrong');
+    const confEmoji = p.confidence==='high' ? '🔥' : p.confidence==='medium' ? '🤔' : '🎲';
+    return `<div class="card pred-card">
+      <span class="pred-type ${p.type}">${p.type==='stock'?'📈 Stock':'💬 Custom'}</span>
+      <h3>${escHtml(title.length>80 ? title.slice(0,80)+'…' : title)}</h3>
+      <div class="pred-meta">
+        <span>📅 ${deadlineStr}</span>
+        <span>${confEmoji} Confidence: ${p.confidence}${p.type==='stock'?' · '+p.exchange:' · '+p.category}</span>
+        ${p.reasoning ? `<span style="font-style:italic">"${escHtml(p.reasoning.slice(0,100))}"</span>` : ''}
+      </div>
+      <span class="pred-status ${statusClass}">${statusText}</span>
+      <div class="pred-actions">
+        ${p.status==='pending' ? `<button class="resolve-correct" onclick="openResolve('${p.id}')">Resolve</button>` : ''}
+        <button onclick="deletePrediction('${p.id}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+  updateStats();
+}
+
+function updateStats() {
+  const total = predictions.length;
+  const pending = predictions.filter(p=>p.status==='pending').length;
+  const correct = predictions.filter(p=>p.result==='correct').length;
+  const wrong = predictions.filter(p=>p.result==='wrong').length;
+  const resolved = correct + wrong;
+  document.getElementById('statTotal').textContent = total;
+  document.getElementById('statPending').textContent = pending;
+  document.getElementById('statCorrect').textContent = correct;
+  document.getElementById('statWrong').textContent = wrong;
+  document.getElementById('statAccuracy').textContent = resolved > 0 ? Math.round(correct/resolved*100)+'%' : '—';
+}
+
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+// ===== RESOLVE =====
+function openResolve(id) {
+  resolvingId = id;
+  const p = predictions.find(x=>x.id===id);
+  const title = p.type==='stock' ? `${p.ticker} ${p.direction} $${p.targetPrice}` : p.text;
+  document.getElementById('resolveText').textContent = `"${title}" — Was this prediction correct?`;
+  document.getElementById('resolveModal').classList.add('show');
+}
+function closeResolveModal() { document.getElementById('resolveModal').classList.remove('show'); resolvingId=null; }
+function resolvePrediction(result) {
+  const p = predictions.find(x=>x.id===resolvingId);
+  if (p) { p.status='resolved'; p.result=result; p.resolvedAt=new Date().toISOString(); save(); }
+  closeResolveModal();
+  renderPredictions();
+  showToast(result==='correct' ? '🎯 Nice call!' : '❌ Better luck next time.');
+}
+function deletePrediction(id) {
+  predictions = predictions.filter(x=>x.id!==id);
+  save();
+  renderPredictions();
+  showToast('🗑 Prediction deleted.');
+}
+
+// ===== NOTIFICATIONS =====
+function scheduleNotification(pred) {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') Notification.requestPermission();
+  const ms = new Date(pred.deadline) - new Date();
+  if (ms > 0 && ms < 2147483647) { // max setTimeout
+    setTimeout(() => {
+      if (Notification.permission === 'granted') {
+        const title = pred.type==='stock' ? `${pred.ticker} prediction deadline!` : 'Prediction deadline!';
+        const body = pred.type==='stock' 
+          ? `Time to check: ${pred.ticker} ${pred.direction} $${pred.targetPrice}` 
+          : pred.text.slice(0,100);
+        new Notification(title, { body, icon:'🔮' });
+        showToast(`⏰ Prediction expired: ${title}`);
+      }
+    }, ms);
+  }
+}
+
+function checkExpired() {
+  const now = new Date();
+  predictions.filter(p=>p.status==='pending' && new Date(p.deadline)<=now).forEach(p => {
+    showToast(`⏰ "${p.type==='stock'?p.ticker:p.text.slice(0,30)}…" has expired — resolve it!`);
+  });
+}
+
+// Re-schedule all pending on load
+predictions.filter(p=>p.status==='pending').forEach(scheduleNotification);
+
+// ===== TOAST =====
+function showToast(msg) {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(),300); }, 4000);
+}
+
+// ===== ANALYSIS =====
+function renderAnalysis() {
+  const cont = document.getElementById('analysisContent');
+  const resolved = predictions.filter(p=>p.status!=='pending');
+  if (resolved.length < 2) {
+    cont.innerHTML = `<div class="card" style="text-align:center;padding:3rem"><div style="font-size:2.5rem;margin-bottom:1rem">📊</div><h3>Not enough data yet</h3><p style="color:var(--text2);margin-top:.5rem">Resolve at least 2 predictions to see your analysis.</p></div>`;
+    return;
+  }
+  const correct = resolved.filter(p=>p.result==='correct').length;
+  const total = resolved.length;
+  const accuracy = Math.round(correct/total*100);
+
+  // By type
+  const byType = {};
+  resolved.forEach(p => {
+    const k = p.type;
+    if (!byType[k]) byType[k] = {correct:0,total:0};
+    byType[k].total++;
+    if (p.result==='correct') byType[k].correct++;
+  });
+
+  // By confidence
+  const byConf = {};
+  resolved.forEach(p => {
+    const k = p.confidence||'medium';
+    if (!byConf[k]) byConf[k] = {correct:0,total:0};
+    byConf[k].total++;
+    if (p.result==='correct') byConf[k].correct++;
+  });
+
+  // By category (custom only)
+  const byCat = {};
+  resolved.filter(p=>p.type==='custom').forEach(p => {
+    const k = p.category||'other';
+    if (!byCat[k]) byCat[k] = {correct:0,total:0};
+    byCat[k].total++;
+    if (p.result==='correct') byCat[k].correct++;
+  });
+
+  const makeBar = (label, correct, total) => {
+    const pct = Math.round(correct/total*100);
+    const color = pct >= 60 ? 'var(--green)' : pct >= 40 ? 'var(--yellow)' : 'var(--red)';
+    return `<div class="bar-group"><div class="bar-value" style="color:${color}">${pct}%</div><div class="bar" style="height:${Math.max(pct,5)}%;background:${color}"></div><div class="bar-label">${label}<br><span style="font-size:.65rem">${correct}/${total}</span></div></div>`;
+  };
+
+  let html = `
+    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:2rem">
+      <div class="card stat-card"><div class="stat-value" style="color:${accuracy>=60?'var(--green)':accuracy>=40?'var(--yellow)':'var(--red)'}">${accuracy}%</div><div class="stat-label">Overall Accuracy</div></div>
+      <div class="card stat-card"><div class="stat-value">${total}</div><div class="stat-label">Resolved</div></div>
+      <div class="card stat-card"><div class="stat-value">${predictions.filter(p=>p.status==='pending').length}</div><div class="stat-label">Still Pending</div></div>
+    </div>
+    <h3 style="margin-bottom:1rem">Accuracy by Type</h3>
+    <div class="chart-container"><div class="bar-chart">${Object.entries(byType).map(([k,v])=>makeBar(k,v.correct,v.total)).join('')}</div></div>
+    <h3 style="margin-bottom:1rem">Accuracy by Confidence Level</h3>
+    <div class="chart-container"><div class="bar-chart">${['low','medium','high'].filter(k=>byConf[k]).map(k=>makeBar(k,byConf[k].correct,byConf[k].total)).join('')}</div></div>
+  `;
+  if (Object.keys(byCat).length > 0) {
+    html += `<h3 style="margin-bottom:1rem">Custom Predictions by Category</h3><div class="chart-container"><div class="bar-chart">${Object.entries(byCat).map(([k,v])=>makeBar(k,v.correct,v.total)).join('')}</div></div>`;
+  }
+
+  // Insight text
+  const highConf = byConf['high'];
+  const lowConf = byConf['low'];
+  let insights = [];
+  if (highConf && highConf.total >= 2) {
+    const hPct = Math.round(highConf.correct/highConf.total*100);
+    if (hPct < 50) insights.push('⚠️ Your high-confidence predictions are underperforming. You might be overconfident.');
+    if (hPct >= 75) insights.push('🔥 Your high-confidence calls are landing well. Trust your gut more.');
+  }
+  if (lowConf && lowConf.total >= 2) {
+    const lPct = Math.round(lowConf.correct/lowConf.total*100);
+    if (lPct > 60) insights.push('🎲 Your "wild guesses" are surprisingly accurate. You may know more than you think.');
+  }
+  if (byType['stock'] && byType['custom']) {
+    const sPct = Math.round(byType['stock'].correct/byType['stock'].total*100);
+    const cPct = Math.round(byType['custom'].correct/byType['custom'].total*100);
+    if (sPct > cPct + 15) insights.push('📈 You\'re better at stock predictions than life predictions.');
+    if (cPct > sPct + 15) insights.push('💬 You\'re better at life predictions than stock calls.');
+  }
+  if (insights.length > 0) {
+    html += `<div class="card" style="margin-top:1.5rem;border-color:var(--accent)"><h3 style="margin-bottom:.8rem">💡 Insights</h3>${insights.map(i=>`<p style="color:var(--text2);margin-bottom:.4rem">${i}</p>`).join('')}</div>`;
+  }
+
+  cont.innerHTML = html;
+}
+
+// Request notification permission on load
+if ('Notification' in window && Notification.permission === 'default') {
+  Notification.requestPermission();
+}
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if(e.target===m) { m.classList.remove('show'); resolvingId=null; }});
+});
+
+// Close ticker results on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('.ticker-search-wrap')) document.getElementById('tickerResults').classList.remove('show');
+});
+</script>
+</body>
+</html>
+
